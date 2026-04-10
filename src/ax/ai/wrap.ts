@@ -52,6 +52,7 @@ import type {
   AxEmbedRequest,
   AxEmbedResponse,
   AxLoggerFunction,
+  AxModelUsage,
 } from './types.js';
 import { AxAIWebLLM, type AxAIWebLLMArgs } from './webllm/api.js';
 import type { AxAIWebLLMModel } from './webllm/types.js';
@@ -308,6 +309,10 @@ export class AxAI<TModelKey = string>
 
   getMetrics(): AxAIServiceMetrics {
     return this.ai.getMetrics();
+  }
+
+  getEstimatedCost(modelUsage?: AxModelUsage): number {
+    return this.ai.getEstimatedCost(modelUsage);
   }
 
   async chat(

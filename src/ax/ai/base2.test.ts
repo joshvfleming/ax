@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AxBaseAIArgs } from './base.js';
 import { AxBaseAI } from './base.js';
-import type { AxAIServiceImpl, AxChatRequest, AxModelInfo } from './types.js';
+import {
+  getOrCreateAIMetricsInstruments,
+  resetAIMetricsInstruments,
+} from './metrics.js';
+import type {
+  AxAIServiceImpl,
+  AxChatRequest,
+  AxModelInfo,
+  AxTokenUsage,
+} from './types.js';
 
 // Create a mock fetch implementation
 const createMockFetch = (responseFactory: () => Response) => {
@@ -317,5 +326,461 @@ describe('AxBaseAI - Per-key flattened merges', () => {
       { debug: false }
     );
     expect(res.embeddings.length).toBeGreaterThan(0);
+  });
+});
+
+describe('AxBaseAI - Cost Estimation', () => {
+  // Helper to create a mock meter that captures counter values
+  const createMockMeter = () => {
+    const counters: Record<
+      string,
+      { values: { value: number; labels: Record<string, unknown> }[] }
+    > = {};
+    return {
+      meter: {
+        createCounter: (name: string) => {
+          counters[name] = { values: [] };
+          return {
+            add: (value: number, labels?: Record<string, unknown>) => {
+              counters[name]!.values.push({ value, labels: labels ?? {} });
+            },
+          };
+        },
+        createHistogram: () => ({ record: () => {} }),
+        createGauge: () => ({ record: () => {} }),
+      },
+      counters,
+    };
+  };
+
+  const createCostTestAI = (
+    modelInfo: AxModelInfo[],
+    tokenUsage: AxTokenUsage,
+    mockMeter: ReturnType<typeof createMockMeter>
+  ) => {
+    const impl: AxAIServiceImpl<
+      string,
+      string,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    > = {
+      createChatReq: () => [{ name: 'test', headers: {} }, {}],
+      createChatResp: () => ({ results: [] }),
+      getModelConfig: () => ({ maxTokens: 100, temperature: 0, stream: false }),
+      getTokenUsage: () => tokenUsage,
+    };
+
+    const config: AxBaseAIArgs<string, string> = {
+      name: 'test-ai',
+      apiURL: 'http://test.com',
+      headers: async () => ({}),
+      modelInfo,
+      defaults: { model: modelInfo[0]!.name },
+      supportFor: { functions: true, streaming: true },
+    };
+
+    resetAIMetricsInstruments();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOrCreateAIMetricsInstruments(mockMeter.meter as any);
+
+    const ai = new AxBaseAI(impl, config);
+    ai.setOptions({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fetch: vi
+        .fn()
+        .mockResolvedValue(new Response('{}', { status: 200 })) as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      meter: mockMeter.meter as any,
+    });
+    return ai;
+  };
+
+  afterEach(() => {
+    resetAIMetricsInstruments();
+  });
+
+  it('should estimate cost from prompt and completion tokens', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'model-a',
+          promptTokenCostPer1M: 3.0,
+          completionTokenCostPer1M: 15.0,
+        } as AxModelInfo,
+      ],
+      { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // (1000 * 3.0 / 1_000_000) + (500 * 15.0 / 1_000_000) = 0.003 + 0.0075 = 0.0105
+    expect(costEntries[0]!.value).toBeCloseTo(0.0105, 6);
+  });
+
+  it('should estimate cost with cache read tokens at discounted rate', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'model-b',
+          promptTokenCostPer1M: 5.0,
+          completionTokenCostPer1M: 25.0,
+          cacheReadTokenCostPer1M: 0.5,
+          cacheWriteTokenCostPer1M: 6.25,
+        } as AxModelInfo,
+      ],
+      {
+        promptTokens: 2000, // uncached input tokens
+        completionTokens: 1000,
+        totalTokens: 13000,
+        cacheReadTokens: 10000,
+      },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // prompt: 2000 * 5.0 / 1M = 0.01
+    // completion: 1000 * 25.0 / 1M = 0.025
+    // cache read: 10000 * 0.5 / 1M = 0.005
+    // total = 0.04
+    expect(costEntries[0]!.value).toBeCloseTo(0.04, 6);
+  });
+
+  it('should estimate cost with cache write tokens', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'model-c',
+          promptTokenCostPer1M: 3.0,
+          completionTokenCostPer1M: 15.0,
+          cacheReadTokenCostPer1M: 0.3,
+          cacheWriteTokenCostPer1M: 3.75,
+        } as AxModelInfo,
+      ],
+      {
+        promptTokens: 1000,
+        completionTokens: 500,
+        totalTokens: 6500,
+        cacheCreationTokens: 5000,
+      },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // prompt: 1000 * 3.0 / 1M = 0.003
+    // completion: 500 * 15.0 / 1M = 0.0075
+    // cache write: 5000 * 3.75 / 1M = 0.01875
+    // total = 0.02925
+    expect(costEntries[0]!.value).toBeCloseTo(0.02925, 6);
+  });
+
+  it('should fall back to prompt rate when cache pricing is not configured', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'model-d',
+          promptTokenCostPer1M: 10.0,
+          completionTokenCostPer1M: 30.0,
+        } as AxModelInfo,
+      ],
+      {
+        promptTokens: 1000,
+        completionTokens: 500,
+        totalTokens: 6500,
+        cacheReadTokens: 5000,
+      },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // No cache-specific pricing, so cache reads use prompt rate
+    // prompt: 1000 * 10.0 / 1M = 0.01
+    // completion: 500 * 30.0 / 1M = 0.015
+    // cache read (at prompt rate): 5000 * 10.0 / 1M = 0.05
+    // total = 0.075
+    expect(costEntries[0]!.value).toBeCloseTo(0.075, 6);
+  });
+
+  it('should record cost for streaming requests', async () => {
+    const mockMeter = createMockMeter();
+
+    const streamImpl: AxAIServiceImpl<
+      string,
+      string,
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      unknown
+    > = {
+      createChatReq: () => [{ name: 'test', headers: {} }, {}],
+      createChatResp: () => ({ results: [{ content: 'hello' }] }),
+      createChatStreamResp: () => ({ results: [{ content: 'hello' }] }),
+      getModelConfig: () => ({ maxTokens: 100, temperature: 0, stream: true }),
+      getTokenUsage: () => ({
+        promptTokens: 1000,
+        completionTokens: 500,
+        totalTokens: 1500,
+      }),
+    };
+
+    const modelInfo = [
+      {
+        name: 'stream-model',
+        promptTokenCostPer1M: 3.0,
+        completionTokenCostPer1M: 15.0,
+      } as AxModelInfo,
+    ];
+
+    resetAIMetricsInstruments();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getOrCreateAIMetricsInstruments(mockMeter.meter as any);
+
+    const ai = new AxBaseAI(streamImpl, {
+      name: 'test-ai',
+      apiURL: 'http://test.com',
+      headers: async () => ({}),
+      modelInfo,
+      defaults: { model: 'stream-model' },
+      supportFor: { functions: true, streaming: true },
+    });
+
+    // Create a mock streaming response
+    const streamResponse = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {}\n\n'));
+        controller.close();
+      },
+    });
+
+    ai.setOptions({
+      fetch: vi.fn().mockResolvedValue(
+        new Response(streamResponse, {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        })
+      ) as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      meter: mockMeter.meter as any,
+    });
+
+    // stream defaults to true, so this should stream
+    const result = await ai.chat({
+      chatPrompt: [{ role: 'user', content: 'hi' }],
+    });
+
+    // Consume the stream to trigger token usage recording
+    const reader = (result as ReadableStream).getReader();
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBeGreaterThan(0);
+    const totalCost = costEntries.reduce((sum, e) => sum + e.value, 0);
+    // (1000 * 3.0 / 1M) + (500 * 15.0 / 1M) = 0.0105
+    expect(totalCost).toBeCloseTo(0.0105, 6);
+  });
+
+  it('should record zero cost when model has no pricing info', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [{ name: 'free-model' } as AxModelInfo],
+      { promptTokens: 1000, completionTokens: 500, totalTokens: 1500 },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    // No cost should be recorded when pricing is missing
+    expect(costEntries.length).toBe(0);
+  });
+
+  it('should include thinking tokens at completion rate', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'thinking-model',
+          promptTokenCostPer1M: 2.0,
+          completionTokenCostPer1M: 12.0,
+        } as AxModelInfo,
+      ],
+      {
+        promptTokens: 1000,
+        completionTokens: 500,
+        totalTokens: 3500,
+        thoughtsTokens: 2000,
+      },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // prompt: 1000 * 2.0 / 1M = 0.002
+    // output (completion + thinking): (500 + 2000) * 12.0 / 1M = 0.03
+    // total = 0.032
+    expect(costEntries[0]!.value).toBeCloseTo(0.032, 6);
+  });
+
+  it('should use long-context rates when input exceeds threshold', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'tiered-model',
+          promptTokenCostPer1M: 1.25,
+          completionTokenCostPer1M: 10.0,
+          longContextThreshold: 200_000,
+          longContextPromptTokenCostPer1M: 2.5,
+          longContextCompletionTokenCostPer1M: 15.0,
+        } as AxModelInfo,
+      ],
+      {
+        promptTokens: 250_000,
+        completionTokens: 1000,
+        totalTokens: 251_000,
+      },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // Long-context rates apply (250k > 200k threshold)
+    // prompt: 250000 * 2.5 / 1M = 0.625
+    // completion: 1000 * 15.0 / 1M = 0.015
+    // total = 0.64
+    expect(costEntries[0]!.value).toBeCloseTo(0.64, 6);
+  });
+
+  it('should use standard rates when input is below threshold', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'tiered-model',
+          promptTokenCostPer1M: 1.25,
+          completionTokenCostPer1M: 10.0,
+          longContextThreshold: 200_000,
+          longContextPromptTokenCostPer1M: 2.5,
+          longContextCompletionTokenCostPer1M: 15.0,
+        } as AxModelInfo,
+      ],
+      {
+        promptTokens: 100_000,
+        completionTokens: 1000,
+        totalTokens: 101_000,
+      },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // Standard rates (100k < 200k threshold)
+    // prompt: 100000 * 1.25 / 1M = 0.125
+    // completion: 1000 * 10.0 / 1M = 0.01
+    // total = 0.135
+    expect(costEntries[0]!.value).toBeCloseTo(0.135, 6);
+  });
+
+  it('should include cached tokens when determining long-context threshold', async () => {
+    const mockMeter = createMockMeter();
+    const ai = createCostTestAI(
+      [
+        {
+          name: 'tiered-cache-model',
+          promptTokenCostPer1M: 1.25,
+          completionTokenCostPer1M: 10.0,
+          cacheReadTokenCostPer1M: 0.125,
+          longContextThreshold: 200_000,
+          longContextPromptTokenCostPer1M: 2.5,
+          longContextCompletionTokenCostPer1M: 15.0,
+          longContextCacheReadTokenCostPer1M: 0.25,
+        } as AxModelInfo,
+      ],
+      {
+        // 50k uncached + 180k cached = 230k total input > 200k threshold
+        promptTokens: 50_000,
+        completionTokens: 1000,
+        totalTokens: 231_000,
+        cacheReadTokens: 180_000,
+      },
+      mockMeter
+    );
+
+    await ai.chat(
+      { chatPrompt: [{ role: 'user', content: 'hi' }] },
+      { stream: false }
+    );
+
+    const costEntries =
+      mockMeter.counters.ax_llm_estimated_cost_total?.values ?? [];
+    expect(costEntries.length).toBe(1);
+    // Long-context rates (50k + 180k = 230k > 200k)
+    // prompt: 50000 * 2.5 / 1M = 0.125
+    // completion: 1000 * 15.0 / 1M = 0.015
+    // cache read: 180000 * 0.25 / 1M = 0.045
+    // total = 0.185
+    expect(costEntries[0]!.value).toBeCloseTo(0.185, 6);
   });
 });

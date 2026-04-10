@@ -1220,15 +1220,15 @@ class AxAIGoogleGeminiImpl
     );
 
     if (resp.usageMetadata) {
+      const cachedTokens = resp.usageMetadata.cachedContentTokenCount ?? 0;
       this.tokensUsed = {
         totalTokens: resp.usageMetadata.totalTokenCount,
-        promptTokens: resp.usageMetadata.promptTokenCount,
+        // Subtract cached tokens so promptTokens represents only uncached input,
+        // matching Anthropic's convention where cache tokens are reported separately.
+        promptTokens: resp.usageMetadata.promptTokenCount - cachedTokens,
         completionTokens: resp.usageMetadata.candidatesTokenCount,
         thoughtsTokens: resp.usageMetadata.thoughtsTokenCount,
-        // Map cached content token count to cacheReadTokens for cost tracking
-        ...(resp.usageMetadata.cachedContentTokenCount !== undefined
-          ? { cacheReadTokens: resp.usageMetadata.cachedContentTokenCount }
-          : {}),
+        ...(cachedTokens > 0 ? { cacheReadTokens: cachedTokens } : {}),
       };
     }
     const response: AxChatResponse = { results };

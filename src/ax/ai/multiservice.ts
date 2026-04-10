@@ -11,6 +11,7 @@ import type {
   AxEmbedResponse,
   AxLoggerFunction,
   AxModelConfig,
+  AxModelUsage,
 } from './types.js';
 import type { AxAIFeatures } from './base.js';
 
@@ -306,6 +307,11 @@ export class AxMultiServiceRouter<
       throw new Error('No service available to get metrics.');
     }
     return serviceInstance.getMetrics();
+  }
+
+  getEstimatedCost(modelUsage?: AxModelUsage): number {
+    const service = this.lastUsedService;
+    return service?.getEstimatedCost(modelUsage) ?? 0;
   }
 
   /**

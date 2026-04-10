@@ -1544,4 +1544,84 @@ describe('AxAIGoogleGemini model key preset merging', () => {
       expect(generateReq.contents[3]?.parts?.[0]?.text).toBe('Live question');
     });
   });
+
+  describe('token usage normalization for cached content', () => {
+    it('should subtract cachedContentTokenCount from promptTokens', async () => {
+      const response = {
+        candidates: [
+          {
+            content: { parts: [{ text: 'hello' }] },
+            finishReason: 'STOP',
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 10000,
+          candidatesTokenCount: 500,
+          totalTokenCount: 10500,
+          cachedContentTokenCount: 8000,
+          thoughtsTokenCount: 0,
+        },
+      };
+
+      const capture = { lastBody: undefined };
+      const fetch = createMockFetch(response, capture);
+
+      const ai = new AxAIGoogleGemini({
+        apiKey: 'test-key',
+        config: { model: AxAIGoogleGeminiModel.Gemini25Pro },
+        models: [],
+      });
+      ai.setOptions({ fetch });
+
+      const res = await ai.chat(
+        { chatPrompt: [{ role: 'user', content: 'hi' }] },
+        { stream: false }
+      );
+
+      const usage = (res as any).modelUsage;
+      expect(usage?.tokens).toBeDefined();
+      // promptTokens should be total minus cached: 10000 - 8000 = 2000
+      expect(usage.tokens.promptTokens).toBe(2000);
+      // cacheReadTokens should be the cached portion
+      expect(usage.tokens.cacheReadTokens).toBe(8000);
+      expect(usage.tokens.completionTokens).toBe(500);
+    });
+
+    it('should leave promptTokens unchanged when no cached content', async () => {
+      const response = {
+        candidates: [
+          {
+            content: { parts: [{ text: 'hello' }] },
+            finishReason: 'STOP',
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 5000,
+          candidatesTokenCount: 200,
+          totalTokenCount: 5200,
+          thoughtsTokenCount: 0,
+        },
+      };
+
+      const capture = { lastBody: undefined };
+      const fetch = createMockFetch(response, capture);
+
+      const ai = new AxAIGoogleGemini({
+        apiKey: 'test-key',
+        config: { model: AxAIGoogleGeminiModel.Gemini25Pro },
+        models: [],
+      });
+      ai.setOptions({ fetch });
+
+      const res = await ai.chat(
+        { chatPrompt: [{ role: 'user', content: 'hi' }] },
+        { stream: false }
+      );
+
+      const usage = (res as any).modelUsage;
+      expect(usage?.tokens).toBeDefined();
+      expect(usage.tokens.promptTokens).toBe(5000);
+      expect(usage.tokens.cacheReadTokens).toBeUndefined();
+    });
+  });
 });

@@ -250,6 +250,9 @@ export const axCreateDefaultColorLogger = (
             formattedMessage += `${cl.white('Service Tier:')} ${usage.tokens.serviceTier}\n`;
           }
         }
+        if (usage.estimatedCost !== undefined) {
+          formattedMessage += `${cl.white('Estimated Cost:')} $${usage.estimatedCost.toFixed(6)}\n`;
+        }
         formattedMessage += divider;
         break;
       }
@@ -424,6 +427,9 @@ export const axCreateDefaultTextLogger = (
           if (textUsage.tokens.serviceTier !== undefined) {
             formattedMessage += `Service Tier: ${textUsage.tokens.serviceTier}\n`;
           }
+        }
+        if (textUsage.estimatedCost !== undefined) {
+          formattedMessage += `Estimated Cost: $${textUsage.estimatedCost.toFixed(6)}\n`;
         }
         formattedMessage += `${divider}\n`;
         break;

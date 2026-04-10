@@ -32,6 +32,16 @@ export type AxModelInfo = {
   characterIsToken?: boolean;
   promptTokenCostPer1M?: number;
   completionTokenCostPer1M?: number;
+  cacheReadTokenCostPer1M?: number;
+  cacheWriteTokenCostPer1M?: number;
+  /** Prompt token cost for requests exceeding longContextThreshold */
+  longContextPromptTokenCostPer1M?: number;
+  /** Completion token cost for requests exceeding longContextThreshold */
+  longContextCompletionTokenCostPer1M?: number;
+  /** Cache read token cost for requests exceeding longContextThreshold */
+  longContextCacheReadTokenCostPer1M?: number;
+  /** Total input token count (including cached) above which long-context rates apply */
+  longContextThreshold?: number;
   aliases?: string[];
   supported?: {
     thinkingBudget?: boolean;
@@ -301,6 +311,7 @@ export type AxDebugChatResponseUsage = AxModelUsage & {
   mutableChatContextCharacters?: number;
   chatContextCharacters?: number;
   totalPromptCharacters?: number;
+  estimatedCost?: number;
 };
 
 export type AxChatResponse = {
@@ -938,6 +949,8 @@ export interface AxAIService<
     req: Readonly<AxEmbedRequest<TEmbedModel | TModelKey>>,
     options?: Readonly<AxAIServiceOptions>
   ): Promise<AxEmbedResponse>;
+
+  getEstimatedCost(modelUsage?: AxModelUsage): number;
 
   setOptions(options: Readonly<AxAIServiceOptions>): void;
   getOptions(): Readonly<AxAIServiceOptions>;

@@ -22,6 +22,7 @@ import type {
   AxEmbedResponse,
   AxLoggerFunction,
   AxModelConfig,
+  AxModelUsage,
 } from './types.js';
 
 // Helper type to extract model keys from a service
@@ -337,6 +338,10 @@ export class AxBalancer<
     }
 
     return metrics;
+  }
+
+  getEstimatedCost(modelUsage?: AxModelUsage): number {
+    return this.currentService.getEstimatedCost(modelUsage);
   }
 
   private canRetryService(

@@ -37,6 +37,7 @@ import {
   recordTimeoutMetric,
   recordTokenMetric,
 } from './metrics.js';
+import { countChatPromptContentChars } from './promptMetrics.js';
 import type {
   AxAIInputModelList,
   AxAIService,
@@ -56,7 +57,6 @@ import type {
   AxModelUsage,
 } from './types.js';
 import { axValidateChatRequestMessage } from './validate.js';
-import { countChatPromptContentChars } from './promptMetrics.js';
 
 /**
  * Entry in the context cache registry.
@@ -716,7 +716,8 @@ export class AxBaseAI<
   // Method to record token usage metrics
   private recordTokenUsage(
     modelUsage?: AxModelUsage,
-    optionsCustomLabels?: Record<string, string>
+    optionsCustomLabels?: Record<string, string>,
+    operationType?: 'chat' | 'embed'
   ): void {
     const metricsInstruments = this.getMetricsInstruments();
     if (metricsInstruments && modelUsage?.tokens) {
@@ -795,6 +796,24 @@ export class AxBaseAI<
           customLabels
         );
       }
+
+      // Record estimated cost alongside token usage
+      if (operationType) {
+        const estimatedCost = this.estimateCostByName(
+          modelUsage.model,
+          modelUsage
+        );
+        if (estimatedCost > 0) {
+          recordEstimatedCostMetric(
+            metricsInstruments,
+            operationType,
+            estimatedCost,
+            this.name,
+            modelUsage.model,
+            customLabels
+          );
+        }
+      }
     }
   }
 
@@ -859,30 +878,6 @@ export class AxBaseAI<
     return modelUsage.tokens.promptTokens / modelInfo.contextWindow;
   }
 
-  // Helper method to estimate cost
-  private estimateCost(model: TModel, modelUsage?: AxModelUsage): number {
-    if (!modelUsage?.tokens) return 0;
-
-    // Get model info to find pricing
-    const modelInfo = this.modelInfo.find(
-      (info) => info.name === (model as string)
-    );
-    if (
-      !modelInfo ||
-      (!modelInfo.promptTokenCostPer1M && !modelInfo.completionTokenCostPer1M)
-    )
-      return 0;
-
-    const { promptTokens = 0, completionTokens = 0 } = modelUsage.tokens;
-    const promptCostPer1M = modelInfo.promptTokenCostPer1M || 0;
-    const completionCostPer1M = modelInfo.completionTokenCostPer1M || 0;
-
-    return (
-      (promptTokens * promptCostPer1M) / 1000000 +
-      (completionTokens * completionCostPer1M) / 1000000
-    );
-  }
-
   // Helper method to estimate cost by model name
   private estimateCostByName(
     modelName: string,
@@ -898,13 +893,46 @@ export class AxBaseAI<
     )
       return 0;
 
-    const { promptTokens = 0, completionTokens = 0 } = modelUsage.tokens;
-    const promptCostPer1M = modelInfo.promptTokenCostPer1M || 0;
-    const completionCostPer1M = modelInfo.completionTokenCostPer1M || 0;
+    const {
+      promptTokens = 0,
+      completionTokens = 0,
+      thoughtsTokens = 0,
+      cacheReadTokens = 0,
+      cacheCreationTokens = 0,
+    } = modelUsage.tokens;
+
+    // Determine if long-context rates apply based on total input tokens
+    const totalInputTokens = promptTokens + cacheReadTokens;
+    const isLongContext =
+      modelInfo.longContextThreshold !== undefined &&
+      totalInputTokens > modelInfo.longContextThreshold;
+
+    const promptCostPer1M = isLongContext
+      ? (modelInfo.longContextPromptTokenCostPer1M ??
+        modelInfo.promptTokenCostPer1M ??
+        0)
+      : (modelInfo.promptTokenCostPer1M ?? 0);
+    const completionCostPer1M = isLongContext
+      ? (modelInfo.longContextCompletionTokenCostPer1M ??
+        modelInfo.completionTokenCostPer1M ??
+        0)
+      : (modelInfo.completionTokenCostPer1M ?? 0);
+    const cacheReadCostPer1M = isLongContext
+      ? (modelInfo.longContextCacheReadTokenCostPer1M ??
+        modelInfo.cacheReadTokenCostPer1M ??
+        promptCostPer1M)
+      : (modelInfo.cacheReadTokenCostPer1M ?? promptCostPer1M);
+    const cacheWriteCostPer1M =
+      modelInfo.cacheWriteTokenCostPer1M ?? promptCostPer1M;
+
+    // Thinking tokens are billed as output tokens
+    const totalOutputTokens = completionTokens + thoughtsTokens;
 
     return (
-      (promptTokens * promptCostPer1M) / 1000000 +
-      (completionTokens * completionCostPer1M) / 1000000
+      (promptTokens * promptCostPer1M) / 1_000_000 +
+      (totalOutputTokens * completionCostPer1M) / 1_000_000 +
+      (cacheReadTokens * cacheReadCostPer1M) / 1_000_000 +
+      (cacheCreationTokens * cacheWriteCostPer1M) / 1_000_000
     );
   }
 
@@ -1100,22 +1128,6 @@ export class AxBaseAI<
           customLabels
         );
       }
-
-      // Record estimated cost
-      const estimatedCost = this.estimateCost(
-        this.lastUsedChatModel!,
-        chatResponse.modelUsage
-      );
-      if (estimatedCost > 0) {
-        recordEstimatedCostMetric(
-          metricsInstruments,
-          'chat',
-          estimatedCost,
-          this.name,
-          model,
-          customLabels
-        );
-      }
     }
   }
 
@@ -1152,24 +1164,17 @@ export class AxBaseAI<
       model,
       customLabels
     );
-
-    // Record estimated cost
-    const estimatedCost = this.estimateCostByName(model, result.modelUsage);
-    if (estimatedCost > 0) {
-      recordEstimatedCostMetric(
-        metricsInstruments,
-        'embed',
-        estimatedCost,
-        this.name,
-        model,
-        customLabels
-      );
-    }
   }
 
   // Public method to get metrics
   public getMetrics(): AxAIServiceMetrics {
     return structuredClone(this.metrics);
+  }
+
+  // Public method to get estimated cost for a given model usage
+  public getEstimatedCost(modelUsage?: AxModelUsage): number {
+    if (!modelUsage) return 0;
+    return this.estimateCostByName(modelUsage.model, modelUsage);
   }
 
   async chat(
@@ -1557,7 +1562,7 @@ export class AxBaseAI<
             }
           }
           this.modelUsage = res.modelUsage;
-          this.recordTokenUsage(res.modelUsage, options?.customLabels);
+          this.recordTokenUsage(res.modelUsage, options?.customLabels, 'chat');
 
           if (span?.isRecording()) {
             setChatResponseEvents(res, span, this.excludeContentFromTrace);
@@ -1691,7 +1696,7 @@ export class AxBaseAI<
 
     if (res.modelUsage) {
       this.modelUsage = res.modelUsage;
-      this.recordTokenUsage(res.modelUsage, options?.customLabels);
+      this.recordTokenUsage(res.modelUsage, options?.customLabels, 'chat');
     }
 
     if (span?.isRecording()) {
@@ -1898,7 +1903,7 @@ export class AxBaseAI<
       }
     }
     this.embedModelUsage = res.modelUsage;
-    this.recordTokenUsage(res.modelUsage, options?.customLabels);
+    this.recordTokenUsage(res.modelUsage, options?.customLabels, 'embed');
 
     if (span?.isRecording() && res.modelUsage?.tokens) {
       span.addEvent(axSpanEvents.GEN_AI_USAGE, {

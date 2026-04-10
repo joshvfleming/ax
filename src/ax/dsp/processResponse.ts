@@ -175,6 +175,10 @@ export async function* processStreamingResponse<OUT extends AxGenOut>({
         usageWithoutCitations.totalPromptCharacters =
           args.debugPromptMetrics.totalPromptCharacters;
       }
+      const estimatedCost = args.ai.getEstimatedCost(lastChunkUsage);
+      if (estimatedCost > 0) {
+        usageWithoutCitations.estimatedCost = estimatedCost;
+      }
 
       args.logger({
         name: 'ChatResponseUsage',
@@ -797,6 +801,10 @@ export async function* processResponse<OUT>({
             debugPromptMetrics.chatContextCharacters;
           debugUsage.totalPromptCharacters =
             debugPromptMetrics.totalPromptCharacters;
+        }
+        const estimatedCost = ai.getEstimatedCost(res.modelUsage);
+        if (estimatedCost > 0) {
+          debugUsage.estimatedCost = estimatedCost;
         }
 
         logger({

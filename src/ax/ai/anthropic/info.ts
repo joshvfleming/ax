@@ -9,6 +9,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 5.0,
     completionTokenCostPer1M: 25.0,
+    cacheReadTokenCostPer1M: 0.5,
+    cacheWriteTokenCostPer1M: 6.25,
     maxTokens: 128000,
     supported: {
       thinkingBudget: true,
@@ -21,6 +23,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 5.0,
     completionTokenCostPer1M: 25.0,
+    cacheReadTokenCostPer1M: 0.5,
+    cacheWriteTokenCostPer1M: 6.25,
     maxTokens: 128000,
     supported: {
       thinkingBudget: true,
@@ -34,6 +38,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -46,6 +52,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -59,6 +67,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 5.0,
     completionTokenCostPer1M: 25.0,
+    cacheReadTokenCostPer1M: 0.5,
+    cacheWriteTokenCostPer1M: 6.25,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -71,6 +81,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 5.0,
     completionTokenCostPer1M: 25.0,
+    cacheReadTokenCostPer1M: 0.5,
+    cacheWriteTokenCostPer1M: 6.25,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -85,6 +97,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     // Estimated/prior pricing aligned with Sonnet tier
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 200000,
     supported: {
       thinkingBudget: true,
@@ -97,6 +111,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 200000,
     supported: {
       thinkingBudget: true,
@@ -111,6 +127,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     // Pricing per Anthropic announcement: $1 input / $5 output per 1M tokens
     promptTokenCostPer1M: 1.0,
     completionTokenCostPer1M: 5.0,
+    cacheReadTokenCostPer1M: 0.1,
+    cacheWriteTokenCostPer1M: 1.25,
     maxTokens: 200000, // match modern context window similar to Sonnet 4.5 era
     supported: { thinkingBudget: true, showThoughts: true },
   },
@@ -119,6 +137,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 1.0,
     completionTokenCostPer1M: 5.0,
+    cacheReadTokenCostPer1M: 0.1,
+    cacheWriteTokenCostPer1M: 1.25,
     maxTokens: 200000,
     supported: { thinkingBudget: true, showThoughts: true },
   },
@@ -128,6 +148,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 15.0,
     completionTokenCostPer1M: 75.0,
+    cacheReadTokenCostPer1M: 1.5,
+    cacheWriteTokenCostPer1M: 18.75,
     maxTokens: 32000,
     supported: {
       thinkingBudget: true,
@@ -140,6 +162,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 15.0,
     completionTokenCostPer1M: 75.0,
+    cacheReadTokenCostPer1M: 1.5,
+    cacheWriteTokenCostPer1M: 18.75,
     maxTokens: 32000,
     supported: {
       thinkingBudget: true,
@@ -152,6 +176,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 15.0,
     completionTokenCostPer1M: 75.0,
+    cacheReadTokenCostPer1M: 1.5,
+    cacheWriteTokenCostPer1M: 18.75,
     maxTokens: 32000,
     supported: {
       thinkingBudget: true,
@@ -164,6 +190,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 15.0,
     completionTokenCostPer1M: 75.0,
+    cacheReadTokenCostPer1M: 1.5,
+    cacheWriteTokenCostPer1M: 18.75,
     maxTokens: 32000,
     supported: {
       thinkingBudget: true,
@@ -176,6 +204,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -188,6 +218,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -201,6 +233,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -213,6 +247,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 64000,
     supported: {
       thinkingBudget: true,
@@ -226,6 +262,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 8192,
     supported: { structuredOutputs: true },
   },
@@ -234,6 +272,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 8192,
     supported: { structuredOutputs: true },
   },
@@ -242,6 +282,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 8192,
     supported: {
       thinkingBudget: true,
@@ -254,6 +296,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 0.8,
     completionTokenCostPer1M: 4.0,
+    cacheReadTokenCostPer1M: 0.08,
+    cacheWriteTokenCostPer1M: 1.0,
     maxTokens: 8192,
   },
   {
@@ -261,6 +305,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 1.0,
     completionTokenCostPer1M: 5.0,
+    cacheReadTokenCostPer1M: 0.1,
+    cacheWriteTokenCostPer1M: 1.25,
     maxTokens: 8192,
   },
   // 3
@@ -269,6 +315,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 15.0,
     completionTokenCostPer1M: 75.0,
+    cacheReadTokenCostPer1M: 1.5,
+    cacheWriteTokenCostPer1M: 18.75,
     maxTokens: 4096,
     supported: { structuredOutputs: true },
   },
@@ -277,6 +325,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 15.0,
     completionTokenCostPer1M: 75.0,
+    cacheReadTokenCostPer1M: 1.5,
+    cacheWriteTokenCostPer1M: 18.75,
     maxTokens: 4096,
     supported: { structuredOutputs: true },
   },
@@ -285,6 +335,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 3.0,
     completionTokenCostPer1M: 15.0,
+    cacheReadTokenCostPer1M: 0.3,
+    cacheWriteTokenCostPer1M: 3.75,
     maxTokens: 4096,
     supported: { structuredOutputs: true },
   },
@@ -293,6 +345,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 0.25,
     completionTokenCostPer1M: 1.25,
+    cacheReadTokenCostPer1M: 0.03,
+    cacheWriteTokenCostPer1M: 0.3,
     maxTokens: 4096,
   },
   {
@@ -300,6 +354,8 @@ export const axModelInfoAnthropic: AxModelInfo[] = [
     currency: 'usd',
     promptTokenCostPer1M: 0.25,
     completionTokenCostPer1M: 1.25,
+    cacheReadTokenCostPer1M: 0.03,
+    cacheWriteTokenCostPer1M: 0.3,
     maxTokens: 4096,
   },
   // 2.1
