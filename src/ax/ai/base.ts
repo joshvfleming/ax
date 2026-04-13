@@ -871,7 +871,10 @@ export class AxBaseAI<
     if (!modelUsage?.tokens?.promptTokens) return 0;
 
     // Get model info to find context window size
-    const modelInfo = getModelInfo({ model: model as string, modelInfo: this.modelInfo });
+    const modelInfo = getModelInfo({
+      model: model as string,
+      modelInfo: this.modelInfo,
+    });
     if (!modelInfo?.contextWindow) return 0;
 
     return modelUsage.tokens.promptTokens / modelInfo.contextWindow;
@@ -885,7 +888,10 @@ export class AxBaseAI<
     if (!modelUsage?.tokens) return 0;
 
     // Get model info to find pricing
-    const modelInfo = getModelInfo({ model: modelName, modelInfo: this.modelInfo });
+    const modelInfo = getModelInfo({
+      model: modelName,
+      modelInfo: this.modelInfo,
+    });
     if (
       !modelInfo ||
       (!modelInfo.promptTokenCostPer1M && !modelInfo.completionTokenCostPer1M)
@@ -1291,7 +1297,10 @@ export class AxBaseAI<
       ...req.modelConfig,
     } as AxModelConfig;
 
-    const selectedModelInfo = getModelInfo({ model: model as string, modelInfo: this.modelInfo });
+    const selectedModelInfo = getModelInfo({
+      model: model as string,
+      modelInfo: this.modelInfo,
+    });
     if (selectedModelInfo?.notSupported?.temperature) {
       if ('temperature' in modelConfig) {
         delete (modelConfig as { temperature?: number }).temperature;
@@ -1304,7 +1313,10 @@ export class AxBaseAI<
     }
 
     // Check for expensive model usage
-    if (selectedModelInfo?.isExpensive && options?.useExpensiveModel !== 'yes') {
+    if (
+      selectedModelInfo?.isExpensive &&
+      options?.useExpensiveModel !== 'yes'
+    ) {
       throw new Error(
         `Model ${model as string} is marked as expensive and requires explicit confirmation. Set useExpensiveModel: "yes" to proceed.`
       );
